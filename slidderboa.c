@@ -109,8 +109,8 @@ void slidderboa_game_renderpresent(slidderboa_t* game) {
     slidderboa_game_renderscore(game);
     slidderboa_game_generatefood(game);
     slidderboa_game_rendersnake(game);
-    slidderboa_game_handlemovement(game);
     slidderboa_game_handlecollision(game);
+    slidderboa_game_handlemovement(game);
     SDL_RenderPresent(game->renderer);
 }
 
@@ -121,18 +121,34 @@ void slidderboa_game_handle_events(slidderboa_t* game) {
         } else if(game->e.type == SDL_KEYDOWN) {
             switch(game->e.key.keysym.sym) {
                 case SDLK_UP:
+                    if(game->snake_direction == SLIDDERBOA_SNAKEDIRECTIONDOWN &&
+                        game->snake_bodysegment_count > 1) {
+                        break;
+                    }
                     game->snake_direction = SLIDDERBOA_SNAKEDIRECTIONUP;
                     game->snake_moving = true;
                     break;
                 case SDLK_DOWN:
+                    if(game->snake_direction == SLIDDERBOA_SNAKEDIRECTIONUP &&
+                        game->snake_bodysegment_count > 1) {
+                        break;
+                    }
                     game->snake_direction = SLIDDERBOA_SNAKEDIRECTIONDOWN;
                     game->snake_moving = true;
                     break;
                 case SDLK_LEFT:
+                    if(game->snake_direction == SLIDDERBOA_SNAKEDIRECTIONRIGHT &&
+                        game->snake_bodysegment_count > 1) {
+                            break;
+                    }
                     game->snake_direction = SLIDDERBOA_SNAKEDIRECTIONLEFT;
                     game->snake_moving = true;
                     break;
                 case SDLK_RIGHT:
+                    if(game->snake_direction == SLIDDERBOA_SNAKEDIRECTIONLEFT &&
+                        game->snake_bodysegment_count) {
+                        break;
+                    }
                     game->snake_direction = SLIDDERBOA_SNAKEDIRECTIONRIGHT;
                     game->snake_moving = true;
                     break;
@@ -167,29 +183,13 @@ void slidderboa_game_generatefood(slidderboa_t* game) {
 void slidderboa_game_rendersnake(slidderboa_t* game) {
     SDL_SetRenderDrawColor(game->renderer, COLOR_TOPARAM(SNAKE_COLOR));
     for(size_t i=0;i<game->snake_bodysegment_count;i++) {
+        if(i > 0) {
+            break;
+        }
         SDL_Rect* current_segment = &game->snake[i];
         SDL_RenderDrawRect(game->renderer, current_segment);
         SDL_RenderFillRect(game->renderer, current_segment);
-        if(i != game->snake_bodysegment_count-1) {
-            switch(game->snake_direction) {
-                case SLIDDERBOA_SNAKEDIRECTIONUP:
-                    game->snake[i+1].x = game->snake[i].x;
-                    game->snake[i+1].y = game->snake[i].y + game->snake[i].h;
-                    break;
-                case SLIDDERBOA_SNAKEDIRECTIONDOWN:
-                    game->snake[i+1].x = game->snake[i].x;
-                    game->snake[i+1].y = game->snake[i].y + game->snake[i].h;
-                    break;
-                case SLIDDERBOA_SNAKEDIRECTIONLEFT:
-                    game->snake[i+1].x = game->snake[i].x + game->snake[i].w;
-                    game->snake[i+1].y = game->snake[i].y;
-                    break;
-                case SLIDDERBOA_SNAKEDIRECTIONRIGHT:
-                    game->snake[i+1].x = game->snake[i].x + game->snake[i].w;
-                    game->snake[i+1].y = game->snake[i].y;
-                    break;
-            }
-        }
+
     }
 }
 
@@ -263,23 +263,39 @@ void slidderboa_game_handlemovement(slidderboa_t* game) {
     }
     switch(game->snake_direction) {
         case SLIDDERBOA_SNAKEDIRECTIONUP:
-            if(game->snake[0].y > game->snake[0].h) {
-                game->snake[0].y -= (int)SNAKE_SPEED;
+            if(game->snake[0].y > game->score_bar.h) {
+                game->snake[0].y -= SNAKE_SPEED;
+            }
+            for(size_t i=1;i<game->snake_bodysegment_count;i++) {
+                game->snake[i].x = game->snake[i-1].x + game->snake[i].w;
+                game->snake[i].y = game->snake[i-1].y + game->snake[i-1].h;
             }
             break;
         case SLIDDERBOA_SNAKEDIRECTIONDOWN:
             if(game->snake[0].y < game->win_height - game->snake[0].h) {
-                game->snake[0].y += (int)SNAKE_SPEED;
+                game->snake[0].y += SNAKE_SPEED;
+            }
+            for(size_t i=1;i<game->snake_bodysegment_count;i++) {
+                game->snake[i].x = game->snake[i-1].x;
+                game->snake[i].y = game->snake[i-1].y - game->snake[i].h;
             }
             break;
         case SLIDDERBOA_SNAKEDIRECTIONLEFT:
             if(game->snake[0].x > 0) {
-                game->snake[0].x -= (int)SNAKE_SPEED;
+                game->snake[0].x -= SNAKE_SPEED;
+            }
+            for(size_t i=1;i<game->snake_bodysegment_count;i++) {
+                game->snake[i].x = game->snake[i-1].x;
+                game->snake_bodysegment_index++;
             }
             break;
         case SLIDDERBOA_SNAKEDIRECTIONRIGHT:
             if(game->snake[0].x < game->win_width - game->snake[0].w) {
-                game->snake[0].x += (int)SNAKE_SPEED;
+                game->snake[0].x += SNAKE_SPEED;
+            }
+            for(size_t i=1;i<game->snake_bodysegment_count;i++) {
+                game->snake[i].x = game->snake[i-1].x - game->snake[i].w;
+                //game->snake[i].y = game->snake[i-1].y + game->snake[i].h;
             }
             break;
     }
@@ -293,27 +309,43 @@ void slidderboa_game_handlecollision(slidderboa_t* game) {
 void slidderboa_game_handlefood_collision(slidderboa_t* game) {
     SDL_Rect* snake = game->snake, food = game->food;
     int snake_direction = game->snake_direction;
+    bool snake_ate = false;
     if(!game->snake_moving) {
         return;
     }
     switch(snake_direction) {
         case SLIDDERBOA_SNAKEDIRECTIONUP:
-            if(snake[0].y+1 <= food.y + food.h && snake[0].y+1 >= food.y) {
-                slidderboa_game_increasesnake_size(game);
+            if(snake[0].x <= food.x + food.w && snake[0].x + snake[0].w >= food.x
+                && snake[0].y <= food.y + food.h + 1 && snake[0].y >= food.y) {
+                printf("You are in the same x and y position as the food just one more step\n");
+                snake_ate = true;
             }
             break;
-        /*case SLIDDERBOA_SNAKEDIRECTIONLEFT:
-            if(snake[0].x-1 <= food.x + food.w && snake[0].x-1 >= food.x) {
-                slidderboa_game_increasesnake_size(game);
+        case SLIDDERBOA_SNAKEDIRECTIONDOWN:
+            if(snake[0].x <= food.x + food.w && snake[0].x + snake[0].w >= food.x
+                && snake[0].y + snake[0].h >= food.y) {
+                printf("You are in the same x and y position as the food just one more step\n");
+                snake_ate = true;
+            }
+            break;
+        case SLIDDERBOA_SNAKEDIRECTIONLEFT:
+            if(snake[0].x <= food.x + food.w && snake[0].x >= food.x
+                && ((snake[0].y <= food.y + food.h && snake[0].y >= food.y) || (snake[0].y +
+                    snake[0].h <= food.y + food.h && snake[0].y + snake[0].h >= food.y))) {
+                snake_ate = true;
             }
             break;
         case SLIDDERBOA_SNAKEDIRECTIONRIGHT:
-            if((snake[0].x+1 <= food.x + food.w && snake[0].x >= food.x) &&
-                (snake[0].y+1 <= food.y + food.h && snake[0].y+1 >= food.y)) {
-                slidderboa_game_increasesnake_size(game);
+            if(snake[0].x + snake[0].w <= food.x + food.w && snake[0].x + snake[0].w >= food.x
+                && ((snake[0].y <= food.y + food.h && snake[0].y >= food.y) || (snake[0].y +
+                    snake[0].h <= food.y + food.h && snake[0].y + snake[0].h >= food.y))) {
+                snake_ate = true;
             }
             break;
-        */
+    }
+    if(snake_ate) {
+        printf("You just ate food\n");
+        slidderboa_game_increasesnake_size(game);
     }
 }
 
@@ -324,13 +356,13 @@ void slidderboa_game_handlewall_collision(slidderboa_t* game) {
         return;
     }
     if(snake_direction == SLIDDERBOA_SNAKEDIRECTIONLEFT && snake[0].x <= 0) {
-        printf("The snake collided while moving LEFT\n");
+        //printf("The snake collided while moving LEFT\n");
     } else if(snake_direction == SLIDDERBOA_SNAKEDIRECTIONRIGHT && snake[0].x + snake[0].h >= game->win_width) {
-        printf("The snake collided while moving RIGHT\n");
+        //printf("The snake collided while moving RIGHT\n");
     } else if(snake_direction == SLIDDERBOA_SNAKEDIRECTIONUP && snake[0].y <= game->score_bar.h) {
-        printf("The snake collided while moving UP\n");
+        //printf("The snake collided while moving UP\n");
     } else if(snake_direction == SLIDDERBOA_SNAKEDIRECTIONDOWN && snake[0].y + snake[0].h >= game->win_height) {
-        printf("The snake collided while moving DOWN\n");
+        //printf("The snake collided while moving DOWN\n");
     }
 }
 

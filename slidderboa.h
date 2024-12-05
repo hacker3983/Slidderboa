@@ -25,7 +25,7 @@ typedef struct slidderboa {
     int font_size, win_width, win_height;
     SDL_Rect* snake, food, score_canvas[2], score_bar;
     SDL_Texture* food_texture;
-    size_t snake_bodysegment_count;
+    size_t snake_bodysegment_index, snake_bodysegment_count;
     slidderboa_assetmanager_t asset_manager;
     Uint32 snake_deltatime;
     int snake_direction;
