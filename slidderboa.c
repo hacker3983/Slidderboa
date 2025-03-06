@@ -2,10 +2,15 @@
 #include "slidderboa_assetmanager.h"
 
 const SDL_Color WINDOW_COLOR = {0x29, 0x33, 0x5C, 0xFF};
+const SDL_Color GAMEOVER_BGCOLOR = {0x12, 0x12, 0x12, 0xFF};
 const SDL_Color SNAKE_COLOR = {0xF3, 0xA7, 0x12, 0xFF};
 const SDL_Color SCORETEXT_COLOR = {0xE4, 0x57, 0x2E, 0xFF};
 const SDL_Color SCORE_COLOR = {0x66, 0x9B, 0xBC, 0xFF};
 const SDL_Color SCORE_BARCOLOR = {0x00, 0x00, 0x00, 0x00};
+const SDL_Color red = {0xFF, 0x00, 0x00, 0xFF};
+const SDL_Color yellow = {0xFF, 0xFF, 0x00, 0xFF};
+const SDL_Color white = {0xFF, 0xFF, 0xFF, 0xFF};
+const SDL_Color green = {0x00, 0xFF, 0x00, 0xFF};
 
 const int SNAKE_SPEED = 5;
 const int SNAKE_SPEEDMS = 50;
@@ -101,16 +106,148 @@ void slidderboa_game_run(slidderboa_t* game) {
         slidderboa_game_handle_events(game);
         slidderboa_game_getwindowsize(game);
         slidderboa_game_renderpresent(game);
+        game->mouse_clicked = false;
+    }
+}
+
+bool slidderboa_game_rect_hover(slidderboa_t* game, SDL_Rect rect) {
+    if((game->mouse_x <= rect.x + rect.w && game->mouse_x >= rect.x) &&
+        (game->mouse_y <= rect.y + rect.h && game->mouse_y >= rect.y)) {
+        return true;
+    }
+    return false;
+}
+
+void slidderboa_game_reset(slidderboa_t* game) {
+    free(game->snake);
+    slidderboa_game_createsnake_head(game);
+    if(game->score > game->highscore) {
+        game->highscore = game->score;
+    }
+    game->score = 0;
+    game->snake_moving = false;
+    game->snake_died = false;
+}
+
+void slidderboa_game_displaygame_over(slidderboa_t* game) {
+    slidderboa_game_setwindowcolor(game, GAMEOVER_BGCOLOR);
+    const char* game_overtext = "Game Over!";
+    SDL_Rect game_overcanvas = {0};
+    TTF_SetFontSize(game->font, 40);
+    TTF_SizeText(game->font, game_overtext, &game_overcanvas.w, &game_overcanvas.h);
+    SDL_Surface* game_oversurface = TTF_RenderText_Blended(game->font, game_overtext, red);
+    SDL_Texture* game_overtexture = SDL_CreateTextureFromSurface(game->renderer, game_oversurface);
+    SDL_FreeSurface(game_oversurface);
+
+    size_t score_len = slidderboa_game_getsize_tlength(game->score),
+           highscore_len = slidderboa_game_getsize_tlength(game->highscore),
+           finalscore_textlen = 13 + score_len;
+    
+    SDL_Rect finalscore_canvas = {0};
+    char* finalscore_text = malloc(finalscore_textlen + 1);
+    sprintf(finalscore_text, "Final Score: %zu", game->score);
+    finalscore_text[finalscore_textlen] = '\0';
+    TTF_SetFontSize(game->font, 25);
+    TTF_SizeText(game->font, finalscore_text, &finalscore_canvas.w, &finalscore_canvas.h);
+    SDL_Surface* finalscore_surface = TTF_RenderText_Blended(game->font, finalscore_text, yellow);
+    SDL_Texture* finalscore_texture = SDL_CreateTextureFromSurface(game->renderer, finalscore_surface);
+    SDL_FreeSurface(finalscore_surface);
+
+    SDL_Rect highscore_canvas = {0};
+    size_t highscore_textlen = 0;
+    char* highscore_text = NULL;
+    printf("game->score: %zu, game->highscore: %zu\n",
+        game->score, game->highscore);
+    if(game->score > game->highscore) {
+        highscore_len = score_len;
+        highscore_textlen = highscore_len + 16;
+        highscore_text = malloc(highscore_textlen + 1);
+        sprintf(highscore_text, "New High Score: %zu", game->score);
+        highscore_text[highscore_textlen] = '\0';
+    } else {
+        highscore_textlen = highscore_len + 12;
+        highscore_text = malloc(highscore_textlen + 1);
+        sprintf(highscore_text, "High Score: %zu", game->highscore);
+        highscore_text[highscore_textlen] = '\0';
+    }
+    TTF_SizeText(game->font, highscore_text, &highscore_canvas.w, &highscore_canvas.h);
+    SDL_Surface* highscore_surface = TTF_RenderText_Blended(game->font, highscore_text, yellow);
+    SDL_Texture* highscore_texture = SDL_CreateTextureFromSurface(game->renderer, highscore_surface);
+    SDL_FreeSurface(highscore_surface);
+
+    TTF_SetFontSize(game->font, 40);
+    const char* playbtn_text = "PLAY AGAIN";
+    SDL_Rect playbtn_textcanvas = {0}, playbtn_canvas = {0};
+    TTF_SizeText(game->font, playbtn_text, &playbtn_textcanvas.w, &playbtn_textcanvas.h);
+    playbtn_canvas.w = playbtn_textcanvas.w + 10, playbtn_canvas.h = playbtn_textcanvas.h + 10;
+    SDL_Surface* playbtn_surface = TTF_RenderText_Blended(game->font, playbtn_text, yellow);
+    SDL_Texture* playbtn_texture = SDL_CreateTextureFromSurface(game->renderer, playbtn_surface);
+    SDL_FreeSurface(playbtn_surface);
+    
+    int max_width = game_overcanvas.w;
+    if(finalscore_canvas.w > max_width) {
+        max_width = finalscore_canvas.w;
+    }
+    if(highscore_canvas.w > max_width) {
+        max_width = finalscore_canvas.w;
+    }
+    if(playbtn_canvas.w > max_width) {
+        max_width = finalscore_canvas.w;
+    }
+    SDL_Rect full_canvas = {
+        .x = 0, .y = 0,
+        .w = max_width,
+        .h = game_overcanvas.h + finalscore_canvas.h + highscore_canvas.h
+            + playbtn_canvas.h + 30
+    };
+    //full_canvas.x = (game->win_width - full_canvas.w) / 2;
+    full_canvas.y = (game->win_height - full_canvas.h) / 2;
+    game_overcanvas.x = (game->win_width - game_overcanvas.w) / 2;
+    game_overcanvas.y = full_canvas.y;
+    SDL_RenderCopy(game->renderer, game_overtexture, NULL, &game_overcanvas);
+    SDL_DestroyTexture(game_overtexture);
+
+    finalscore_canvas.x = (game->win_width - finalscore_canvas.w) / 2;
+    finalscore_canvas.y = game_overcanvas.y + game_overcanvas.h + 10;
+    SDL_RenderCopy(game->renderer, finalscore_texture, NULL, &finalscore_canvas);
+    SDL_DestroyTexture(finalscore_texture);
+    free(finalscore_text);
+
+    highscore_canvas.x = (game->win_width - highscore_canvas.w) / 2;
+    highscore_canvas.y = finalscore_canvas.y + finalscore_canvas.h + 10;
+    SDL_RenderCopy(game->renderer, highscore_texture, NULL, &highscore_canvas);
+    SDL_DestroyTexture(highscore_texture);
+    free(highscore_text);
+
+    playbtn_canvas.x = (game->win_width - playbtn_canvas.w) / 2;
+    playbtn_canvas.y = highscore_canvas.y + highscore_canvas.h + 10;
+    playbtn_textcanvas.x = playbtn_canvas.x + (playbtn_canvas.w - playbtn_textcanvas.w) / 2;
+    playbtn_textcanvas.y = playbtn_canvas.y + (playbtn_canvas.h - playbtn_textcanvas.h) / 2;
+    SDL_SetRenderDrawColor(game->renderer, COLOR_TOPARAM(green));
+    SDL_RenderDrawRect(game->renderer, &playbtn_canvas);
+    SDL_RenderCopy(game->renderer, playbtn_texture, NULL, &playbtn_textcanvas);
+    SDL_DestroyTexture(playbtn_texture);
+
+    if(slidderboa_game_rect_hover(game, playbtn_canvas)) {
+        if(game->mouse_clicked) {
+            slidderboa_game_reset(game);
+            printf("You clicked the play button\n");
+            game->mouse_clicked = false;
+        }
     }
 }
 
 void slidderboa_game_renderpresent(slidderboa_t* game) {
-    slidderboa_game_setwindowcolor(game, WINDOW_COLOR);
-    slidderboa_game_renderscore(game);
-    slidderboa_game_generatefood(game);
-    slidderboa_game_rendersnake(game);
-    slidderboa_game_handlecollision(game);
-    slidderboa_game_handlemovement(game);
+    if(game->snake_died) {
+        slidderboa_game_displaygame_over(game);
+    } else {
+        slidderboa_game_setwindowcolor(game, WINDOW_COLOR);
+        slidderboa_game_renderscore(game);
+        slidderboa_game_generatefood(game);
+        slidderboa_game_rendersnake(game);
+        slidderboa_game_handlecollision(game);
+        slidderboa_game_handlemovement(game);
+    }
     SDL_RenderPresent(game->renderer);
 }
 
@@ -153,6 +290,13 @@ void slidderboa_game_handle_events(slidderboa_t* game) {
                     game->snake_moving = true;
                     break;
             }
+        } else if(game->e.type == SDL_MOUSEMOTION) {
+            game->mouse_x = game->e.motion.x,
+            game->mouse_y = game->e.motion.y;
+        } else if(game->e.type == SDL_MOUSEBUTTONUP) {
+            game->mouse_x = game->e.button.x,
+            game->mouse_y = game->e.button.y;
+            game->mouse_clicked = true;
         }
     }
 }
@@ -183,9 +327,6 @@ void slidderboa_game_generatefood(slidderboa_t* game) {
 void slidderboa_game_rendersnake(slidderboa_t* game) {
     SDL_SetRenderDrawColor(game->renderer, COLOR_TOPARAM(SNAKE_COLOR));
     for(size_t i=0;i<game->snake_bodysegment_count;i++) {
-        if(i > 0) {
-            break;
-        }
         SDL_Rect* current_segment = &game->snake[i];
         SDL_RenderDrawRect(game->renderer, current_segment);
         SDL_RenderFillRect(game->renderer, current_segment);
@@ -228,7 +369,6 @@ void slidderboa_game_renderscore(slidderboa_t* game) {
     score_bar->h = (score_textcanvas->h > score_canvas->h) ? score_textcanvas->h : score_canvas->h;
     score_canvas->x = score_textcanvas->x + score_textcanvas->w;
 
-
     SDL_SetRenderDrawColor(game->renderer, COLOR_TOPARAM(SCORE_BARCOLOR));
     SDL_RenderDrawRect(game->renderer, score_bar);
     SDL_RenderFillRect(game->renderer, score_bar);
@@ -250,6 +390,9 @@ void slidderboa_game_renderscore(slidderboa_t* game) {
 }
 
 void slidderboa_game_handlemovement(slidderboa_t* game) {
+    if(game->snake_died) {
+        return;
+    }
     if(!game->snake_moving) {
         return;
     }
@@ -261,42 +404,22 @@ void slidderboa_game_handlemovement(slidderboa_t* game) {
     } else {
         return;
     }
+    for(size_t i=game->snake_bodysegment_count-1;i>0;i--) {
+        game->snake[i].x = game->snake[i-1].x;
+        game->snake[i].y = game->snake[i-1].y;
+    }
     switch(game->snake_direction) {
         case SLIDDERBOA_SNAKEDIRECTIONUP:
-            if(game->snake[0].y > game->score_bar.h) {
-                game->snake[0].y -= SNAKE_SPEED;
-            }
-            for(size_t i=1;i<game->snake_bodysegment_count;i++) {
-                game->snake[i].x = game->snake[i-1].x + game->snake[i].w;
-                game->snake[i].y = game->snake[i-1].y + game->snake[i-1].h;
-            }
+            game->snake[0].y -= SNAKE_SPEED;
             break;
         case SLIDDERBOA_SNAKEDIRECTIONDOWN:
-            if(game->snake[0].y < game->win_height - game->snake[0].h) {
-                game->snake[0].y += SNAKE_SPEED;
-            }
-            for(size_t i=1;i<game->snake_bodysegment_count;i++) {
-                game->snake[i].x = game->snake[i-1].x;
-                game->snake[i].y = game->snake[i-1].y - game->snake[i].h;
-            }
+            game->snake[0].y += SNAKE_SPEED;
             break;
         case SLIDDERBOA_SNAKEDIRECTIONLEFT:
-            if(game->snake[0].x > 0) {
-                game->snake[0].x -= SNAKE_SPEED;
-            }
-            for(size_t i=1;i<game->snake_bodysegment_count;i++) {
-                game->snake[i].x = game->snake[i-1].x;
-                game->snake_bodysegment_index++;
-            }
+            game->snake[0].x -= SNAKE_SPEED;
             break;
         case SLIDDERBOA_SNAKEDIRECTIONRIGHT:
-            if(game->snake[0].x < game->win_width - game->snake[0].w) {
-                game->snake[0].x += SNAKE_SPEED;
-            }
-            for(size_t i=1;i<game->snake_bodysegment_count;i++) {
-                game->snake[i].x = game->snake[i-1].x - game->snake[i].w;
-                //game->snake[i].y = game->snake[i-1].y + game->snake[i].h;
-            }
+            game->snake[0].x += SNAKE_SPEED;
             break;
     }
 }
@@ -352,17 +475,24 @@ void slidderboa_game_handlefood_collision(slidderboa_t* game) {
 void slidderboa_game_handlewall_collision(slidderboa_t* game) {
     SDL_Rect* snake = game->snake;
     int snake_direction = game->snake_direction;
+    if(game->snake_died) {
+        return;
+    }
     if(!game->snake_moving) {
         return;
     }
     if(snake_direction == SLIDDERBOA_SNAKEDIRECTIONLEFT && snake[0].x <= 0) {
-        //printf("The snake collided while moving LEFT\n");
-    } else if(snake_direction == SLIDDERBOA_SNAKEDIRECTIONRIGHT && snake[0].x + snake[0].h >= game->win_width) {
-        //printf("The snake collided while moving RIGHT\n");
+        printf("The snake collided while moving LEFT\n");
+        game->snake_died = true;
+    } else if(snake_direction == SLIDDERBOA_SNAKEDIRECTIONRIGHT && snake[0].x + snake[0].w >= game->win_width) {
+        printf("The snake collided while moving RIGHT\n");
+        game->snake_died = true;
     } else if(snake_direction == SLIDDERBOA_SNAKEDIRECTIONUP && snake[0].y <= game->score_bar.h) {
-        //printf("The snake collided while moving UP\n");
+        printf("The snake collided while moving UP\n");
+        game->snake_died = true;
     } else if(snake_direction == SLIDDERBOA_SNAKEDIRECTIONDOWN && snake[0].y + snake[0].h >= game->win_height) {
-        //printf("The snake collided while moving DOWN\n");
+        printf("The snake collided while moving DOWN\n");
+        game->snake_died = true;
     }
 }
 
