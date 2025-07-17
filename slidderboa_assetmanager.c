@@ -1,6 +1,5 @@
 #include "slidderboa_assetmanager.h"
-
-const char* slidderboa_assetpaths[] = {"assets\\food", "assets\\body"};
+const char* slidderboa_assetpaths[] = {"assets/food", "assets/body"};
 
 void slidderboa_assetmanager_init(slidderboa_t* game) {
     memset(game->asset_manager.assets, 0, SLIDDERBOA_ASSETCOUNT * sizeof(slidderboa_asset_t));
@@ -81,7 +80,7 @@ void slidderboa_assetmanager_loadassets(slidderboa_t* game) {
         #else
         DIR* directory = opendir(slidderboa_assetpaths[asset_type]);
         struct dirent* direntry = NULL;
-        while(direntry = readdir(directory)) {
+        while((direntry = readdir(directory))) {
             char* asset_name = direntry->d_name;
             if(!strcmp(asset_name,  ".") || !strcmp(asset_name, "..")) {
                 continue;
@@ -90,9 +89,10 @@ void slidderboa_assetmanager_loadassets(slidderboa_t* game) {
             char full_assetpath[full_assetpath_len];
             memset(full_assetpath, 0, full_assetpath_len);
             strcpy(full_assetpath, slidderboa_assetpaths[asset_type]);
-            strcat(full_assetpath, "\\");
+            strcat(full_assetpath, "/");
             strcat(full_assetpath, asset_name);
-            slidderboa_assetmanager_addasset(game, asset_type, direntry->d_name);
+	    printf("loaded asset path %s\n", full_assetpath);
+            slidderboa_assetmanager_addasset(game, asset_type, full_assetpath);
         }
         closedir(directory);
         #endif
