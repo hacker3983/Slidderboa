@@ -2,4 +2,7 @@ slidderboa.o
 slidderboa_assetmanager.o
 slidderboa.exe
 slidderboa
+*.exe
 .vscode
+*.out
+*.swp
